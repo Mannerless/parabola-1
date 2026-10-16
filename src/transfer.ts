@@ -26,7 +26,12 @@ import { TransferError, SubmissionTimeoutError, AttestationNotReadyError } from 
 import { toRawAmount, fromRawAmount, decimalsForChain } from "./utils/amount.js";
 import { parseUsdcAmount, stellarAddressToBytes32, evmAddressToBytes32, encodeStellarForwardHook } from "./utils/encoding.js";
 import { decodeCctpMessage } from "./utils/message.js";
-import { approveUsdcOnArc, burnUsdcOnArcWithStellarForward, receiveMessageOnArc } from "./chains/arc.js";
+import {
+  approveUsdcOnArc,
+  readUsdcAllowanceOnArc,
+  burnUsdcOnArcWithStellarForward,
+  receiveMessageOnArc,
+} from "./chains/arc.js";
 import {
   approveUsdcOnStellar,
   burnUsdcOnStellar,
@@ -159,9 +164,24 @@ async function burn(args: {
 
     // TokenMessengerV2 pulls USDC via transferFrom under the hood; it must be
     // approved to spend at least amountRaw before depositForBurnWithHook will
-    // succeed. Approving the exact amount per call avoids leaving a standing
-    // allowance beyond what this transfer needs.
-    await approveUsdcOnArc(signer, amountRaw, network, arcRpcUrl);
+    // succeed. Check current allowance first to skip redundant approval transactions.
+    const owner = signer.walletClient.account?.address;
+    let shouldApprove = true;
+    if (owner) {
+      try {
+        const currentAllowance = await readUsdcAllowanceOnArc(owner, network, arcRpcUrl);
+        if (currentAllowance >= amountRaw) {
+          shouldApprove = false;
+        }
+      } catch {
+        // Fail closed: if reading allowance fails, proceed to approve
+        shouldApprove = true;
+      }
+    }
+
+    if (shouldApprove) {
+      await approveUsdcOnArc(signer, amountRaw, network, arcRpcUrl);
+    }
     return runBurn(() => {
       const hookData = encodeStellarForwardHook(params.recipient);
       const mintRecipientBytes32 = stellarAddressToBytes32(stellarConfig(network).cctpForwarder);

@@ -91,6 +91,16 @@ const erc20Abi = [
     ],
     outputs: [{ name: "", type: "bool" }],
   },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
 ] as const;
 
 /**
@@ -133,6 +143,21 @@ async function writeAndWait(
     throw new SubmissionTimeoutError(message, hash);
   }
   return hash;
+}
+
+/** Reads the current USDC allowance granted by owner to TokenMessengerV2 on Arc. */
+export async function readUsdcAllowanceOnArc(
+  owner: `0x${string}`,
+  network: Network,
+  rpcUrl?: string,
+): Promise<bigint> {
+  const arc = arcConfig(network);
+  return publicClient(network, rpcUrl).readContract({
+    address: arc.usdc as Hex,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [owner, arc.tokenMessengerV2 as Hex],
+  });
 }
 
 /** Approves the TokenMessengerV2 contract to spend USDC on the signer's behalf. */

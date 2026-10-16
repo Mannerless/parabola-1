@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const waitForTransactionReceipt = vi.fn();
+const readContract = vi.fn();
 
 vi.mock("viem", async (importOriginal) => {
   const actual = await importOriginal<typeof import("viem")>();
   return {
     ...actual,
-    createPublicClient: () => ({ waitForTransactionReceipt }),
+    createPublicClient: () => ({ waitForTransactionReceipt, readContract }),
   };
 });
 
 const {
   approveUsdcOnArc,
+  readUsdcAllowanceOnArc,
   burnUsdcOnArc,
   burnUsdcOnArcWithStellarForward,
   receiveMessageOnArc,
@@ -60,6 +62,33 @@ describe("approveUsdcOnArc", () => {
     const call = writeContract.mock.calls[0]?.[0];
     expect(call.address).toBe(ARC_MAINNET.usdc);
     expect(call.args).toEqual([ARC_MAINNET.tokenMessengerV2, 10_000_000n]);
+  });
+});
+
+describe("readUsdcAllowanceOnArc", () => {
+  it("reads current allowance on USDC contract with owner and TokenMessengerV2", async () => {
+    readContract.mockResolvedValue(25_000_000n);
+    const owner = "0x1111111111111111111111111111111111111111";
+
+    const allowance = await readUsdcAllowanceOnArc(owner, "testnet");
+
+    expect(allowance).toBe(25_000_000n);
+    expect(readContract).toHaveBeenCalledTimes(1);
+    const call = readContract.mock.calls[0]?.[0];
+    expect(call.address).toBe(ARC_TESTNET.usdc);
+    expect(call.functionName).toBe("allowance");
+    expect(call.args).toEqual([owner, ARC_TESTNET.tokenMessengerV2]);
+  });
+
+  it("targets mainnet USDC and TokenMessengerV2 when network is mainnet", async () => {
+    readContract.mockResolvedValue(100n);
+    const owner = "0x2222222222222222222222222222222222222222";
+
+    await readUsdcAllowanceOnArc(owner, "mainnet");
+
+    const call = readContract.mock.calls[0]?.[0];
+    expect(call.address).toBe(ARC_MAINNET.usdc);
+    expect(call.args).toEqual([owner, ARC_MAINNET.tokenMessengerV2]);
   });
 });
 
