@@ -13,7 +13,9 @@ export class TransferError extends Error {
    * Machine-readable discriminator for the wrapped failure, set when the underlying error
    * has a type a caller can act on. `"ATTESTATION_NOT_READY"` means the burn is real and
    * the attestation simply has not arrived yet, so the caller should retry rather than
-   * treat the transfer as lost. Undefined for failures with no more specific classification.
+   * treat the transfer as lost. `"TRANSFER_ABORTED"` indicates that execution was cancelled
+   * via an AbortSignal after the source-chain burn was submitted or confirmed.
+   * Undefined for failures with no more specific classification.
    */
   readonly code?: TransferErrorCode;
 
@@ -31,7 +33,7 @@ export class TransferError extends Error {
   }
 }
 
-export type TransferErrorCode = "ATTESTATION_NOT_READY";
+export type TransferErrorCode = "ATTESTATION_NOT_READY" | "TRANSFER_ABORTED";
 
 /**
  * Thrown when a burn has been confirmed on the source chain but Circle has not attested it
