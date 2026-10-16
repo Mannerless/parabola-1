@@ -83,6 +83,25 @@ describe("decodeCctpMessage", () => {
     expect(() => decodeCctpMessage("0x00000001")).toThrow(/shorter than the 376-byte/);
   });
 
+  it("rejects an unsupported CCTP message version naming expected and received versions", () => {
+    // Modify first 4 bytes (header version) from 0x00000001 to 0x00000002
+    const badVersionMessage = "0x00000002" + LIVE_TESTNET_BURN_MESSAGE.slice(10);
+    expect(() => decodeCctpMessage(badVersionMessage)).toThrow(
+      /Unsupported CCTP message version: expected 1, got 2/,
+    );
+  });
+
+  it("rejects an unsupported CCTP burn body version naming expected and received versions", () => {
+    // Header is 148 bytes (296 hex characters). Offset in string: 2 (0x) + 296 = 298.
+    // Replace the 4 bytes (8 hex characters) of body version from 00000001 to 00000002
+    const beforeBodyVersion = LIVE_TESTNET_BURN_MESSAGE.slice(0, 298);
+    const afterBodyVersion = LIVE_TESTNET_BURN_MESSAGE.slice(298 + 8);
+    const badBodyVersionMessage = beforeBodyVersion + "00000002" + afterBodyVersion;
+    expect(() => decodeCctpMessage(badBodyVersionMessage)).toThrow(
+      /Unsupported CCTP burn body version: expected 1, got 2/,
+    );
+  });
+
   it("rejects a non-hex message", () => {
     expect(() => decodeCctpMessage("0xzz")).toThrow(/valid hex/);
   });

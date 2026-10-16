@@ -81,6 +81,14 @@ function readBytes32(raw: Buffer, offset: number): `0x${string}` {
 }
 
 /**
+ * Expected on-wire version fields for CCTP messages and burn bodies decoded by this SDK.
+ * Note: While Circle references the protocol as CCTP V2, both MessageV2.sol and
+ * BurnMessageV2.sol define their on-wire protocol versions as uint32 1.
+ */
+export const SUPPORTED_MESSAGE_VERSION = 1;
+export const SUPPORTED_BURN_BODY_VERSION = 1;
+
+/**
  * Decodes a CCTP V2 burn message into its header and body fields. Every message this SDK
  * produces or completes is a burn message, so the body is decoded as one; a message whose
  * body is not a burn body is rejected by the length check rather than misread.
@@ -90,6 +98,20 @@ export function decodeCctpMessage(message: string): CctpBurnMessage {
   if (raw.length < V2_BURN_MESSAGE_MINIMUM_LENGTH) {
     throw new Error(
       `CCTP message is ${raw.length} bytes, shorter than the ${V2_BURN_MESSAGE_MINIMUM_LENGTH}-byte V2 burn message minimum`,
+    );
+  }
+
+  const version = raw.readUInt32BE(HEADER_OFFSET.version);
+  if (version !== SUPPORTED_MESSAGE_VERSION) {
+    throw new Error(
+      `Unsupported CCTP message version: expected ${SUPPORTED_MESSAGE_VERSION}, got ${version}`,
+    );
+  }
+
+  const burnBodyVersion = raw.readUInt32BE(BODY_OFFSET.version);
+  if (burnBodyVersion !== SUPPORTED_BURN_BODY_VERSION) {
+    throw new Error(
+      `Unsupported CCTP burn body version: expected ${SUPPORTED_BURN_BODY_VERSION}, got ${burnBodyVersion}`,
     );
   }
 
