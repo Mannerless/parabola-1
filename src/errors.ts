@@ -113,30 +113,3 @@ export class SubmissionTimeoutError extends Error {
     this.hash = hash;
   }
 }
-
-/**
- * Thrown before any approve or burn when the requested transfer amount carries more
- * significant decimal places than the destination chain's USDC supports.
- */
-export class AmountPrecisionError extends Error {
-  readonly amount: string;
-  readonly precision: number;
-  readonly supportedDecimals: number;
-  readonly destination: ChainId;
-
-  constructor(
-    amount: string,
-    precision: number,
-    supportedDecimals: number,
-    destination: ChainId,
-  ) {
-    super(
-      `Amount ${amount} has ${precision} significant decimal places, exceeding the ${supportedDecimals} decimal places supported on ${destination}`,
-    );
-    this.name = "AmountPrecisionError";
-    this.amount = amount;
-    this.precision = precision;
-    this.supportedDecimals = supportedDecimals;
-    this.destination = destination;
-  }
-}

@@ -319,6 +319,26 @@ describe("checkStellarRecipientReady", () => {
       /503 Service Unavailable/,
     );
   });
+
+  it("rejects when getLedgerEntries throws a transport error inside unmocked getAccount()", async () => {
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockRejectedValue(
+      new TypeError("fetch failed: ENOTFOUND nonexistent-rpc.invalid"),
+    );
+
+    await expect(
+      checkStellarRecipientReady(Keypair.random().publicKey(), "testnet", "https://nonexistent-rpc.invalid"),
+    ).rejects.toThrow(/fetch failed: ENOTFOUND nonexistent-rpc\.invalid/);
+  });
+
+  it("reports not-existing when unmocked getAccount() receives empty entries from getLedgerEntries", async () => {
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockResolvedValue({
+      entries: [],
+      latestLedger: 100,
+    } as any);
+
+    const status = await checkStellarRecipientReady(Keypair.random().publicKey());
+    expect(status).toEqual({ exists: false, hasTrustline: false, ready: false });
+  });
 });
 
 describe("mintAndForwardOnStellar (CctpForwarder.mint_and_forward)", () => {

@@ -121,7 +121,7 @@ describe("transfer (Arc -> Stellar)", () => {
     });
 
     expect(result.status).toBe("pending");
-    expect(approveUsdcOnStellar).toHaveBeenCalledWith(11_230_000n, stellarSigner, "mainnet", undefined);
+    expect(approveUsdcOnStellar).toHaveBeenCalledWith(11_230_000n, stellarSigner, "mainnet", undefined, undefined);
     expect(burnUsdcOnStellar).toHaveBeenCalledTimes(1);
   });
 

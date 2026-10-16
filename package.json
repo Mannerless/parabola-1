@@ -15,7 +15,6 @@
     "url": "https://github.com/ASCTP/parabola/issues"
   },
   "homepage": "https://github.com/ASCTP/parabola#readme",
-  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

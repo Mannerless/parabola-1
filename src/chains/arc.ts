@@ -145,60 +145,6 @@ async function writeAndWait(
   return hash;
 }
 
-/**
- * Reads the current USDC allowance granted by `owner` to TokenMessengerV2 on Arc.
- * Returns 0n if the read fails so callers fail closed and still submit the exact-amount approve.
- */
-export async function getUsdcAllowanceOnArc(
-  owner: Hex,
-  network: Network,
-  rpcUrl?: string,
-): Promise<bigint> {
-  const arc = arcConfig(network);
-  try {
-    return await publicClient(network, rpcUrl).readContract({
-      address: arc.usdc as Hex,
-      abi: erc20Abi,
-      functionName: "allowance",
-      args: [owner, arc.tokenMessengerV2 as Hex],
-    });
-  } catch {
-    return 0n;
-  }
-}
-
-/**
- * Approves the TokenMessengerV2 contract to spend USDC on the signer's behalf,
- * skipping the on-chain write when the existing allowance already covers `amountRaw`.
- */
-export async function approveUsdcOnArc(
-  signer: ArcSigner,
-  amountRaw: bigint,
-  network: Network,
-  rpcUrl?: string,
-): Promise<Hex | undefined> {
-  const account = signer.walletClient.account;
-  if (!account) {
-    throw new Error("ArcSigner's walletClient must have an account attached");
-  }
-  const currentAllowance = await getUsdcAllowanceOnArc(account.address, network, rpcUrl);
-  if (currentAllowance >= amountRaw) {
-    return undefined;
-  }
-  const arc = arcConfig(network);
-  return writeAndWait(
-    signer,
-    {
-      address: arc.usdc as Hex,
-      abi: erc20Abi,
-      functionName: "approve",
-      args: [arc.tokenMessengerV2 as Hex, amountRaw],
-    },
-    network,
-    rpcUrl,
-  );
-}
-
 /** Reads the current USDC allowance granted to TokenMessengerV2 by the signer or owner address. */
 export async function getUsdcAllowanceOnArc(
   signerOrOwner: ArcSigner | Hex,
@@ -222,6 +168,43 @@ export async function getUsdcAllowanceOnArc(
     functionName: "allowance",
     args: [owner, arc.tokenMessengerV2 as Hex],
   });
+}
+
+/**
+ * Approves the TokenMessengerV2 contract to spend USDC on the signer's behalf,
+ * skipping the on-chain write when the existing allowance already covers `amountRaw`.
+ */
+export async function approveUsdcOnArc(
+  signer: ArcSigner,
+  amountRaw: bigint,
+  network: Network,
+  rpcUrl?: string,
+): Promise<Hex | undefined> {
+  const account = signer.walletClient.account;
+  if (!account) {
+    throw new Error("ArcSigner's walletClient must have an account attached");
+  }
+  let currentAllowance = 0n;
+  try {
+    currentAllowance = await getUsdcAllowanceOnArc(account.address, network, rpcUrl);
+  } catch {
+    currentAllowance = 0n;
+  }
+  if (currentAllowance >= amountRaw) {
+    return undefined;
+  }
+  const arc = arcConfig(network);
+  return writeAndWait(
+    signer,
+    {
+      address: arc.usdc as Hex,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [arc.tokenMessengerV2 as Hex, amountRaw],
+    },
+    network,
+    rpcUrl,
+  );
 }
 
 /** Burns USDC on Arc via TokenMessengerV2.depositForBurn for a plain (non-Stellar) destination. */

@@ -213,7 +213,6 @@ export async function approveUsdcOnStellar(
   }
   const retryConfig = resolveRetryConfig(retry, 6, 1500);
   const stellar = stellarConfig(network);
-  const { attempts, delayMs } = resolveRetry(retry, ALLOWANCE_WAIT_DEFAULTS);
   const server = getServer(network, rpcUrl);
   const latestLedger = await server.getLatestLedger();
   const expirationLedger = latestLedger.sequence + 100_000;
@@ -276,12 +275,38 @@ export async function checkStellarRecipientReady(
   const stellar = stellarConfig(network);
   const server = getServer(network, rpcUrl);
 
+  // In @stellar/stellar-sdk, server.getAccount() delegates to getAccountEntry(), which
+  // calls getLedgerEntry() -> _getLedgerEntries() and catches any rejection (including DNS,
+  // ECONNREFUSED, and 5xx RPC outages) to rethrow `new Error("Account not found: ...")`.
+  // Route getLedgerEntry through a wrapped getLedgerEntries so any underlying RPC transport
+  // error is preserved and rethrown instead of being masked as a missing account.
+  let underlyingLedgerError: unknown;
+  const origGetLedgerEntries = server.getLedgerEntries.bind(server);
+  server.getLedgerEntries = async (...keys) => {
+    try {
+      return await origGetLedgerEntries(...keys);
+    } catch (rpcErr) {
+      underlyingLedgerError = rpcErr;
+      throw rpcErr;
+    }
+  };
+  server.getLedgerEntry = async (key) => {
+    const results = await server.getLedgerEntries(key);
+    if (!results?.entries || results.entries.length !== 1) {
+      throw new Error(`failed to find an entry for key ${key.toXDR("base64")}`);
+    }
+    return results.entries[0]!;
+  };
+
   let account;
   try {
     account = await server.getAccount(recipient);
   } catch (err) {
     if (signal?.aborted) {
       throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+    }
+    if (underlyingLedgerError !== undefined) {
+      throw underlyingLedgerError;
     }
     if (isAccountNotFoundError(err)) {
       return { exists: false, hasTrustline: false, ready: false };
@@ -349,8 +374,6 @@ async function waitForAllowance(
   spender: string,
   minimum: bigint,
   network: Network,
-  attempts: number,
-  delayMs: number,
   rpcUrl?: string,
   retryConfig?: { attempts: number; delayMs: number },
   signal?: AbortSignal,
@@ -391,7 +414,6 @@ export async function burnUsdcOnStellar(params: {
   }
   const retryConfig = resolveRetryConfig(params.retry, 3, 2000);
   const stellar = stellarConfig(params.network);
-  const { attempts, delayMs } = resolveRetry(params.retry, RPC_LAG_RETRY_DEFAULTS);
   const recipientBytes = Buffer.from(params.mintRecipientBytes32.slice(2), "hex");
 
   // Argument order per the deployed contract's interface (stellar contract info
