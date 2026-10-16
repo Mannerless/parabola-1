@@ -24,9 +24,32 @@ export function stellarAddressToBytes32(address: string): `0x${string}` {
   return pad(toHex(raw), { size: 32 });
 }
 
-/** Inverse of stellarAddressToBytes32 for ed25519 public keys (G... accounts). */
+/**
+ * Inverse of stellarAddressToBytes32 for ed25519 public keys (G... accounts).
+ *
+ * Validates that the input is an 0x-prefixed 32-byte hex string (64 hex characters)
+ * before decoding to prevent malformed hex or odd-length inputs from producing
+ * corrupted public keys.
+ *
+ * Note on Contract IDs (C... strkeys): Contract addresses also decode to 32 raw
+ * bytes, but raw bytes32 does not preserve the strkey version byte. This function
+ * decodes strictly to ed25519 public keys (G... accounts). To decode a 32-byte
+ * contract ID back to a C... strkey, use `StrKey.encodeContract(Buffer.from(hex, "hex"))`.
+ */
 export function bytes32ToStellarAddress(bytes32: `0x${string}`): string {
-  const hex = bytes32.startsWith("0x") ? bytes32.slice(2) : bytes32;
+  if (typeof bytes32 !== "string" || !bytes32.startsWith("0x")) {
+    throw new Error(`Invalid bytes32 hex string: missing 0x prefix: ${bytes32}`);
+  }
+  const hex = bytes32.slice(2);
+  if (hex.length % 2 !== 0) {
+    throw new Error(`Invalid bytes32 hex string: odd length (${hex.length} hex chars): ${bytes32}`);
+  }
+  if (hex.length !== 64) {
+    throw new Error(`Invalid bytes32 length: expected 64 hex characters (32 bytes), got ${hex.length}: ${bytes32}`);
+  }
+  if (!/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(`Invalid bytes32 hex string: contains non-hexadecimal characters: ${bytes32}`);
+  }
   const raw = Buffer.from(hex, "hex");
   return StrKey.encodeEd25519PublicKey(raw);
 }

@@ -35,6 +35,64 @@ describe("stellarAddressToBytes32 / bytes32ToStellarAddress", () => {
       /Invalid Stellar address/,
     );
   });
+
+  describe("bytes32ToStellarAddress input validation", () => {
+    it("round-trips multiple valid sample G-addresses", () => {
+      for (let i = 0; i < 5; i++) {
+        const kp = Keypair.random();
+        const g = kp.publicKey();
+        const b32 = stellarAddressToBytes32(g);
+        expect(bytes32ToStellarAddress(b32)).toBe(g);
+      }
+    });
+
+    it("throws when missing 0x prefix", () => {
+      const validHexWithoutPrefix = "a".repeat(64);
+      expect(() => bytes32ToStellarAddress(validHexWithoutPrefix as any)).toThrow(
+        /missing 0x prefix/,
+      );
+    });
+
+    it("throws on odd-length hex strings", () => {
+      expect(() => bytes32ToStellarAddress("0xabc" as any)).toThrow(
+        /odd length/,
+      );
+      expect(() => bytes32ToStellarAddress(("0x" + "f".repeat(63)) as any)).toThrow(
+        /odd length/,
+      );
+    });
+
+    it("throws on wrong byte lengths", () => {
+      // 20 bytes (40 hex chars)
+      expect(() => bytes32ToStellarAddress(("0x" + "0".repeat(40)) as any)).toThrow(
+        /expected 64 hex characters \(32 bytes\), got 40/,
+      );
+      // 33 bytes (66 hex chars)
+      expect(() => bytes32ToStellarAddress(("0x" + "0".repeat(66)) as any)).toThrow(
+        /expected 64 hex characters \(32 bytes\), got 66/,
+      );
+    });
+
+    it("throws on non-hex characters", () => {
+      const nonHex = "0x" + "0".repeat(62) + "zz";
+      expect(() => bytes32ToStellarAddress(nonHex as any)).toThrow(
+        /contains non-hexadecimal characters/,
+      );
+    });
+
+    it("documents contract (C...) strkey behavior explicitly", () => {
+      // Contract addresses (C...) encode into raw 32 bytes via stellarAddressToBytes32.
+      // bytes32ToStellarAddress decodes raw 32 bytes into ed25519 public keys (G...).
+      // To recover the C... strkey, callers should use StrKey.encodeContract.
+      const rawContractBytes = Buffer.alloc(32, 42);
+      const contractStrkey = StrKey.encodeContract(rawContractBytes);
+      const bytes32 = stellarAddressToBytes32(contractStrkey);
+
+      const asGAddress = bytes32ToStellarAddress(bytes32);
+      expect(StrKey.isValidEd25519PublicKey(asGAddress)).toBe(true);
+      expect(StrKey.encodeContract(Buffer.from(bytes32.slice(2), "hex"))).toBe(contractStrkey);
+    });
+  });
 });
 
 describe("encodeStellarForwardHook", () => {
